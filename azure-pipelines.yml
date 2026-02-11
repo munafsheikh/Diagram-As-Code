@@ -1,0 +1,83 @@
+trigger:
+  branches:
+    include:
+      - main
+      - master
+      - feature/*
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  NODE_VERSION: '20.x'
+  DIAGRAM_INPUT: 'examples/architecture.puml'
+  OUTPUT_DIR: 'dist'
+
+stages:
+  - stage: Create
+    displayName: Create and Validate Encoded PlantUML
+    jobs:
+      - job: EncodeAndValidate
+        steps:
+          - checkout: self
+          - task: UseNode@1
+            inputs:
+              version: $(NODE_VERSION)
+          - script: npm ci
+            displayName: Install dependencies
+          - script: sudo apt-get update && sudo apt-get install -y plantuml
+            displayName: Install PlantUML for offline ASCII validation
+          - script: npm run format:check
+            displayName: Format check
+          - script: npm test
+            displayName: Run test suite
+          - script: npm run validate:ascii -- --input $(DIAGRAM_INPUT) --out-dir $(OUTPUT_DIR)
+            displayName: Validate diagram via ASCII render + grep
+          - script: grep -Ei "error|syntax" $(OUTPUT_DIR)/architecture.ascii.txt && exit 1 || true
+            displayName: Grep ASCII output for syntax errors
+          - script: node scripts/render-diagrams.js --input $(DIAGRAM_INPUT) --out-dir $(OUTPUT_DIR)
+            displayName: Encode/decode and fetch SVG/PNG via PlantUML server
+          - publish: $(OUTPUT_DIR)
+            artifact: rendered-diagrams
+
+  - stage: Build
+    displayName: Build Wiki Delivery Bundle
+    dependsOn: Create
+    jobs:
+      - job: PackageBundle
+        steps:
+          - checkout: self
+          - download: current
+            artifact: rendered-diagrams
+          - task: UseNode@1
+            inputs:
+              version: $(NODE_VERSION)
+          - script: npm ci
+            displayName: Install dependencies
+          - script: |
+              mkdir -p $(OUTPUT_DIR)
+              cp $(Pipeline.Workspace)/rendered-diagrams/* $(OUTPUT_DIR)/
+            displayName: Prepare output directory
+          - script: node scripts/deploy-wiki.js --svg $(OUTPUT_DIR)/architecture.svg --png $(OUTPUT_DIR)/architecture.png --encoded $(OUTPUT_DIR)/architecture.encoded.txt
+            displayName: Build deployment summary for Wiki
+          - publish: $(OUTPUT_DIR)
+            artifact: wiki-bundle
+
+  - stage: Deploy
+    displayName: Deploy artifacts to Azure DevOps Wiki
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: PublishToWiki
+        environment: diagram-wiki
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: wiki-bundle
+                - script: |
+                    echo "Wiki bundle ready for publication:"
+                    ls -la $(Pipeline.Workspace)/wiki-bundle
+                    echo "Use Azure DevOps Wiki publish task/integration with these artifacts."
+                  displayName: Deploy wiki bundle

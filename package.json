@@ -1,4 +1,23 @@
 {
+  "name": "diagram-as-code",
+  "version": "1.0.0",
+  "description": "Offline-first PlantUML renderer with Azure DevOps pipeline automation",
+  "main": "src/renderer.js",
+  "scripts": {
+    "format": "node scripts/format-check.js --write",
+    "format:check": "node scripts/format-check.js",
+    "test": "node --test tests/*.test.js",
+    "render:all": "node scripts/render-diagrams.js --input examples/architecture.puml --out-dir dist",
+    "validate:ascii": "node scripts/validate-ascii.js --input examples/architecture.puml --out-dir dist",
+    "deploy:wiki": "node scripts/deploy-wiki.js --svg dist/architecture.svg --png dist/architecture.png"
+  },
+  "keywords": [
+    "plantuml",
+    "azure-devops",
+    "wiki",
+    "diagrams"
+  ],
+  "license": "MIT",
   "dependencies": {
     "plantuml-encoder": "^1.4.0"
   }
