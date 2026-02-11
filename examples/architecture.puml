@@ -1,0 +1,19 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+title Azure DevOps Wiki PlantUML Rendering Pipeline
+
+actor Developer
+participant "Azure Pipeline" as Pipeline
+participant "Offline PlantUML" as Offline
+participant "PlantUML Server" as Server
+participant "Azure DevOps Wiki" as Wiki
+
+Developer -> Pipeline: Commit diagram source
+Pipeline -> Offline: Render -ttxt and inspect output
+Offline --> Pipeline: ASCII representation
+Pipeline -> Pipeline: grep -Ei "error|syntax"
+Pipeline -> Server: GET /svg/{encoded}
+Pipeline -> Server: GET /png/{encoded}
+Server --> Pipeline: SVG + PNG
+Pipeline -> Wiki: Publish artifacts
+@enduml
